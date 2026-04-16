@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>DRZ MINER</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@700;800&display=swap" rel="stylesheet">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --obsidian:    #07080a;
+      --surface:     #0f1114;
+      --surface-2:   #161a1e;
+      --border:      rgba(255,255,255,0.06);
+      --gold:        #f0c040;
+      --gold-dim:    #a8862c;
+      --gold-glow:   rgba(240,192,64,0.18);
+      --green:       #39d98a;
+      --red:         #ff5555;
+      --blue:        #4d9fff;
+      --text:        #e8eaed;
+      --muted:       #4a5060;
+      --font-mono:   'JetBrains Mono', monospace;
+      --font-main:   'Space Grotesk', sans-serif;
+      --radius:      16px;
+      --radius-sm:   10px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-main);
+      background: var(--obsidian);
+      color: var(--text);
+      height: 100dvh;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    /* ── SPLASH ─────────────────────────────────── */
+    #splash {
+      position: fixed; inset: 0;
+      background: var(--obsidian);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 24px; z-index: 999;
+      transition: opacity 0.6s ease;
+    }
+    #splash .logo-text {
+      font-family: var(--font-mono);
+      font-size: 2.4rem; font-weight: 800;
+      letter-spacing: -1px;
+    }
+    #splash .logo-text span { color: var(--gold); }
+    #splash .loader-ring {
+      width: 36px; height: 36px;
+      border: 3px solid var(--surface-2);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    #splash .tagline {
+      font-size: 0.75rem; color: var(--muted);
+      letter-spacing: 3px; text-transform: uppercase;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── LAYOUT ─────────────────────────────────── */
+    #app { display: flex; flex-direction: column; height: 100dvh; }
+
+    header {
+      flex-shrink: 0;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 16px 10px;
+      background: var(--obsidian);
+      border-bottom: 1px solid var(--border);
+    }
+    .logo { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 800; }
+    .logo span { color: var(--gold); }
+
+    .balances { display: flex; gap: 6px; }
+    .badge {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 9px;
+      font-size: 0.7rem; font-weight: 700;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .badge .val { font-family: var(--font-mono); color: var(--gold); }
+
+    /* ── CONTENT ────────────────────────────────── */
+    .content {
+      flex: 1; overflow-y: auto; overflow-x: hidden;
+      padding: 14px 14px 90px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .content::-webkit-scrollbar { display: none; }
+
+    /* ── PAGES ──────────────────────────────────── */
+    .page { display: none; animation: fadeUp 0.25s ease; }
+    .page.active { display: block; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── CARDS ──────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .card-title {
+      font-size: 0.6rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 2px;
+      color: var(--muted); margin-bottom: 8px;
+    }
+
+    /* ── MINE PAGE ──────────────────────────────── */
+    .balance-card {
+      background: linear-gradient(135deg, #0f1114 0%, #1a1505 100%);
+      border-color: rgba(240,192,64,0.15);
+      text-align: center; padding: 20px 14px;
+      position: relative; overflow: hidden;
+    }
+    .balance-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, var(--gold-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .balance-amount {
+      font-family: var(--font-mono);
+      font-size: 2.4rem; font-weight: 800;
+      color: var(--gold); line-height: 1;
+    }
+    .balance-label { font-size: 0.6rem; color: var(--muted); margin-top: 4px; letter-spacing: 2px; text-transform: uppercase; }
+    .balance-usd { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+    .balance-usd b { color: var(--green); }
+
+    /* ── CLICKER BUTTON ─────────────────────────── */
+    .clicker-wrap { display: flex; justify-content: center; padding: 16px 0; }
+    .clicker {
+      width: 160px; height: 160px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #1e1e10 0%, #0a0900 100%);
+      border: 2px solid rgba(240,192,64,0.2);
+      box-shadow:
+        0 0 0 8px rgba(240,192,64,0.04),
+        0 0 60px rgba(0,0,0,0.8),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: transform 0.08s, box-shadow 0.08s;
+      position: relative;
+    }
+    .clicker:active {
+      transform: scale(0.91);
+      box-shadow:
+        0 0 0 4px rgba(240,192,64,0.12),
+        0 0 30px rgba(0,0,0,0.9),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+    .clicker-icon {
+      font-size: 4.5rem;
+      filter: drop-shadow(0 0 12px rgba(240,192,64,0.5));
+      transform: rotate(-10deg);
+      transition: transform 0.08s;
+      pointer-events: none;
+    }
+    .clicker:active .clicker-icon { transform: rotate(-20deg) scale(0.9); }
+
+    /* Float +DRZ animation */
+    .float-text {
+      position: fixed;
+      font-family: var(--font-mono);
+      font-weight: 800;
+      font-size: 1rem;
+      color: var(--gold);
+      pointer-events: none;
+      z-index: 100;
+      animation: floatUp 0.8s ease-out forwards;
+    }
+    @keyframes floatUp {
+      0%   { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-60px) scale(1.2); }
+    }
+
+    /* ── BARS ───────────────────────────────────── */
+    .bar-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 5px;
+    }
+    .bar-label { font-size: 0.6rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }
+    .bar-val { font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700; }
+    .bar-track {
+      width: 100%; height: 6px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 3px; overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+    .bar-fill.energy { background: linear-gradient(90deg, #f0c040, #ff9500); }
+    .bar-fill.rank   { background: linear-gradient(90deg, #4d9fff, #9b59b6); }
+
+    .rank-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(240,192,64,0.1);
+      border: 1px solid rgba(240,192,64,0.2);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 0.65rem; font-weight: 700;
+      color: var(--gold);
+    }
+
+    /* ── STATS MINI GRID ────────────────────────── */
+    .mini-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-top: 8px; }
+    .mini-stat {
+      background: var(--surface-2);
+      border-radius: var(--radius-sm);
+      padding: 10px 8px;
+      text-align: center;
+    }
+    .mini-stat .ms-val { font-family: var(--font-mono); font-size: 0.85rem; font-weight: 800; color: var(--gold); }
+    .mini-stat .ms-label { font-size: 0.55rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+    /* ── MARKET ─────────────────────────────────── */
+    .hw-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hw-card::after {
+      content: '';
+      position: absolute; top: 0; right: 0;
+      width: 80px; height: 80px;
+      background: radial-gradient(circle, var(--gold-glow), transparent 70%);
+      pointer-events: none;
+    }
+    .hw-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .hw-name { font-size: 0.95rem; font-weight: 800; }
+    .hw-price { font-family: var(--font-mono); font-size: 0.85rem; color: var(--gold); font-weight: 800; }
+    .hw-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin-bottom: 12px; }
+    .hw-stat { background: var(--surface-2); border-radius: 8px; padding: 7px; text-align: center; }
+    .hw-stat .v { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 800; color: var(--green); display: block; }
+    .hw-stat .k { font-size: 0.52rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+    /* ── BUTTONS ────────────────────────────────── */
+    .btn {
+      width: 100%; padding: 13px;
+      border: none; border-radius: var(--radius-sm);
+      font-family: var(--font-main); font-size: 0.8rem; font-weight: 800;
+      cursor: pointer; letter-spacing: 0.5px;
+      transition: transform 0.1s, opacity 0.1s;
+    }
+    .btn:active { transform: scale(0.97); opacity: 0.85; }
+    .btn-gold { background: linear-gradient(135deg, #f0c040, #c8922a); color: #000; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-green { background: linear-gradient(135deg, #39d98a, #0fa55a); color: #000; }
+    .btn-red   { background: linear-gradient(135deg, #ff5555, #c0392b); color: #fff; }
+
+    /* ── QUESTS ─────────────────────────────────── */
+    .quest-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 10px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .quest-icon { font-size: 1.8rem; flex-shrink: 0; }
+    .quest-info { flex: 1; }
+    .quest-name { font-size: 0.85rem; font-weight: 800; }
+    .quest-sub  { font-size: 0.65rem; color: var(--muted); margin: 2px 0 6px; }
+    .quest-reward {
+      font-family: var(--font-mono); font-size: 0.7rem;
+      font-weight: 800; color: var(--gold);
+      white-space: nowrap;
+    }
+    .quest-done { color: var(--green) !important; }
+
+    /* ── WALLET ─────────────────────────────────── */
+    .wallet-hero {
+      background: linear-gradient(135deg, #0d1117 0%, #0a1220 100%);
+      border: 1px solid rgba(77,159,255,0.15);
+      border-radius: var(--radius);
+      padding: 24px 16px;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .wallet-total { font-family: var(--font-mono); font-size: 2.2rem; font-weight: 800; }
+    .wallet-total .currency { font-size: 1rem; color: var(--muted); }
+    .wallet-label { font-size: 0.6rem; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; }
+
+    .wallet-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .wallet-action {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 8px;
+      text-align: center; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .wallet-action:active { background: var(--surface-2); }
+    .wallet-action .wa-icon { font-size: 1.4rem; margin-bottom: 4px; display: block; }
+    .wallet-action .wa-label { font-size: 0.58rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+
+    /* Swap Box */
+    #swap-box {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 10px;
+    }
+    .swap-input-wrap { position: relative; margin: 10px 0; }
+    .swap-input {
+      width: 100%; background: var(--surface-2);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text); font-family: var(--font-mono);
+      font-size: 1.4rem; font-weight: 800;
+      padding: 12px 56px 12px 14px;
+      outline: none;
+    }
+    .swap-input::placeholder { color: var(--muted); font-size: 1rem; }
+    .swap-input:focus { border-color: rgba(240,192,64,0.3); }
+    .swap-coin { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 0.7rem; color: var(--gold); font-weight: 700; }
+    .swap-result { color: var(--green); font-family: var(--font-mono); font-size: 0.9rem; font-weight: 700; margin: 8px 0 12px; }
+
+    /* TX History */
+    .tx-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .tx-item:last-child { border-bottom: none; }
+    .tx-type { font-size: 0.75rem; font-weight: 700; }
+    .tx-date { font-size: 0.6rem; color: var(--muted); margin-top: 2px; }
+    .tx-amount { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 800; }
+    .tx-amount.pos { color: var(--green); }
+    .tx-amount.neg { color: var(--red); }
+    .tx-status { font-size: 0.55rem; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+    .tx-status.pending  { background: rgba(240,192,64,0.15); color: var(--gold); }
+    .tx-status.complete { background: rgba(57,217,138,0.15); color: var(--green); }
+    .tx-status.failed   { background: rgba(255,85,85,0.15);  color: var(--red); }
+
+    /* Deposit Modal */
+    #modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.8); z-index: 500;
+      align-items: flex-end; justify-content: center;
+    }
+    #modal-overlay.open { display: flex; }
+    .modal-sheet {
+      background: var(--surface);
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding: 20px 16px 36px;
+      width: 100%; max-width: 520px;
+      border-top: 1px solid var(--border);
+      animation: slideModal 0.3s ease;
+    }
+    @keyframes slideModal { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
+    .modal-title { font-size: 1rem; font-weight: 800; margin-bottom: 14px; }
+    .deposit-address {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      word-break: break-all;
+      color: var(--gold);
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .info-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+    .info-k { font-size: 0.65rem; color: var(--muted); }
+    .info-v { font-size: 0.65rem; font-weight: 700; }
+
+    /* Withdraw Modal */
+    .modal-input {
+      width: 100%; background: var(--surface-2);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text); font-family: var(--font-mono);
+      font-size: 1rem; font-weight: 700;
+      padding: 12px 14px; outline: none; margin-bottom: 8px;
+    }
+    .modal-input:focus { border-color: rgba(240,192,64,0.3); }
+    .modal-input::placeholder { color: var(--muted); font-weight: 400; }
+
+    /* ── REFS ───────────────────────────────────── */
+    .ref-card { text-align: center; padding: 24px 16px; }
+    .ref-count { font-family: var(--font-mono); font-size: 3rem; font-weight: 800; color: var(--gold); }
+    .ref-link-box {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--muted);
+      word-break: break-all;
+      margin: 12px 0;
+    }
+    .ref-tiers { margin-top: 10px; }
+    .ref-tier {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .ref-tier:last-child { border-bottom: none; }
+
+    /* ── SECTION TITLE ──────────────────────────── */
+    .section-title {
+      font-size: 0.65rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 3px;
+      color: var(--muted); margin: 16px 0 8px;
+    }
+    .section-title:first-child { margin-top: 0; }
+
+    /* ── NAV ────────────────────────────────────── */
+    nav {
+      flex-shrink: 0;
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: 76px;
+      background: rgba(7,8,10,0.96);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around; align-items: center;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    .nav-btn {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 3px; padding: 8px 12px; cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .nav-btn .ni { font-size: 1.3rem; }
+    .nav-btn .nl { font-size: 0.52rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); transition: color 0.15s; }
+    .nav-btn.active .nl { color: var(--gold); }
+    .nav-btn.active .ni { filter: drop-shadow(0 0 8px var(--gold)); }
+
+    /* ── TOAST ──────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: var(--surface-2); border: 1px solid var(--border);
+      padding: 10px 18px; border-radius: 20px;
+      font-size: 0.75rem; font-weight: 700;
+      opacity: 0; transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none; z-index: 200; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── LOADING STATE ──────────────────────────── */
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.4; }
+    }
+    .loading-pulse { animation: pulse 1.2s ease infinite; }
+
+    /* Scrollable sections */
+    .content { scrollbar-width: none; }
+  </style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="logo-text">DRZ <span>MINER</span></div>
+  <div class="tagline">Web3 Mining Protocol</div>
+  <div class="loader-ring"></div>
+</div>
+
+<div id="app">
+  <!-- HEADER -->
+  <header>
+    <div class="logo">DRZ <span>PRO</span></div>
+    <div class="balances">
+      <div class="badge">⛏️ <span class="val" id="hdr-drz">0.00</span></div>
+      <div class="badge">💵 <span class="val" id="hdr-usdt">0.00</span></div>
+    </div>
+  </header>
+
+  <div class="content">
+
+    <!-- ════ PAGE: MINE ════ -->
+    <div id="page-mine" class="page active">
+
+      <div class="card balance-card">
+        <div class="balance-label">Balance Total</div>
+        <div class="balance-amount" id="bal-drz">0.00</div>
+        <div style="font-size:0.65rem; color: var(--muted); margin-top:2px;">DRZ TOKEN</div>
+        <div class="balance-usd">≈ <b>$<span id="bal-usd">0.00</span></b> USD</div>
+      </div>
+
+      <div class="mini-grid">
+        <div class="mini-stat">
+          <div class="ms-val" id="stat-power">0.01</div>
+          <div class="ms-label">Power/tap</div>
+        </div>
+        <div class="mini-stat">
+          <div class="ms-val" id="stat-clicks">0</div>
+          <div class="ms-label">Clics</div>
+        </div>
+        <div class="mini-stat">
+          <div class="ms-val" id="stat-rank">🥉</div>
+          <div class="ms-label">Rango</div>
+        </div>
+      </div>
+
+      <div class="clicker-wrap">
+        <div class="clicker" id="clicker">
+          <span class="clicker-icon">⛏️</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="bar-row">
+          <span class="bar-label">⚡ Energía</span>
+          <span class="bar-val" id="energy-txt" style="color:var(--gold)">100 / 100</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill energy" id="energy-bar" style="width:100%"></div>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">🏆 Rango Minero</span>
+          <span class="rank-badge" id="rank-badge">Bronce</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill rank" id="rank-bar" style="width:5%"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ════ PAGE: QUESTS ════ -->
+    <div id="page-quests" class="page">
+      <div class="section-title">Misiones Activas</div>
+
+      <div class="quest-card" id="q1-card">
+        <div class="quest-icon">🖱️</div>
+        <div class="quest-info">
+          <div class="quest-name">Maestro del Click</div>
+          <div class="quest-sub">Clicks: <span id="q1-prog">0</span> / 1,000</div>
+          <div class="bar-track" style="margin:0"><div class="bar-fill energy" id="q1-bar" style="width:0%"></div></div>
+        </div>
+        <div class="quest-reward" id="q1-reward">+50 DRZ</div>
+      </div>
+
+      <div class="quest-card" id="q2-card">
+        <div class="quest-icon">💎</div>
+        <div class="quest-info">
+          <div class="quest-name">Gran Inversor</div>
+          <div class="quest-sub">Gasta: <span id="q2-prog">0</span> / 500 DRZ</div>
+          <div class="bar-track" style="margin:0"><div class="bar-fill rank" id="q2-bar" style="width:0%"></div></div>
+        </div>
+        <div class="quest-reward" id="q2-reward">+100 DRZ</div>
+      </div>
+
+      <div class="quest-card" id="q3-card">
+        <div class="quest-icon">👥</div>
+        <div class="quest-info">
+          <div class="quest-name">Reclutador</div>
+          <div class="quest-sub">Referidos: <span id="q3-prog">0</span> / 5</div>
+          <div class="bar-track" style="margin:0"><div class="bar-fill rank" id="q3-bar" style="width:0%"></div></div>
+        </div>
+        <div class="quest-reward" id="q3-reward">+200 DRZ</div>
+      </div>
+
+      <div class="section-title">Misiones Diarias</div>
+
+      <div class="quest-card">
+        <div class="quest-icon">📅</div>
+        <div class="quest-info">
+          <div class="quest-name">Check-In Diario</div>
+          <div class="quest-sub">Conectarse cada día</div>
+        </div>
+        <div>
+          <button class="btn btn-gold" style="width:auto; padding:7px 14px; font-size:0.7rem;" onclick="dailyCheckIn()">CLAIM</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ PAGE: MARKET ════ -->
+    <div id="page-market" class="page">
+      <div class="section-title">Hardware Shop</div>
+
+      <div class="hw-card">
+        <div class="hw-header">
+          <div>
+            <div class="hw-name">📟 Antminer S9</div>
+            <div style="font-size:0.62rem; color:var(--muted); margin-top:3px;">Nivel de entrada • 1.4 TH/s</div>
+          </div>
+          <div class="hw-price">🌀 100</div>
+        </div>
+        <div class="hw-grid">
+          <div class="hw-stat"><span class="v">+5.00</span><span class="k">DRZ/día</span></div>
+          <div class="hw-stat"><span class="v">+150</span><span class="k">DRZ/mes</span></div>
+          <div class="hw-stat"><span class="v">20d</span><span class="k">ROI</span></div>
+          <div class="hw-stat"><span class="v" style="color:var(--gold)">+0.05</span><span class="k">/tap</span></div>
+        </div>
+        <button class="btn btn-gold" onclick="buyHardware(0, 100, 0.05, 5)">ADQUIRIR</button>
+      </div>
+
+      <div class="hw-card">
+        <div class="hw-header">
+          <div>
+            <div class="hw-name">🎛️ RIG RTX 4090</div>
+            <div style="font-size:0.62rem; color:var(--muted); margin-top:3px;">Gama Alta • 25 TH/s</div>
+          </div>
+          <div class="hw-price">🌀 500</div>
+        </div>
+        <div class="hw-grid">
+          <div class="hw-stat"><span class="v">+30.00</span><span class="k">DRZ/día</span></div>
+          <div class="hw-stat"><span class="v">+900</span><span class="k">DRZ/mes</span></div>
+          <div class="hw-stat"><span class="v">17d</span><span class="k">ROI</span></div>
+          <div class="hw-stat"><span class="v" style="color:var(--gold)">+0.20</span><span class="k">/tap</span></div>
+        </div>
+        <button class="btn btn-gold" onclick="buyHardware(1, 500, 0.20, 30)">ADQUIRIR</button>
+      </div>
+
+      <div class="hw-card">
+        <div class="hw-header">
+          <div>
+            <div class="hw-name">🖥️ ASIC S21 Pro</div>
+            <div style="font-size:0.62rem; color:var(--muted); margin-top:3px;">Industrial • 200 TH/s</div>
+          </div>
+          <div class="hw-price">🌀 2,000</div>
+        </div>
+        <div class="hw-grid">
+          <div class="hw-stat"><span class="v">+150.0</span><span class="k">DRZ/día</span></div>
+          <div class="hw-stat"><span class="v">+4,500</span><span class="k">DRZ/mes</span></div>
+          <div class="hw-stat"><span class="v">13d</span><span class="k">ROI</span></div>
+          <div class="hw-stat"><span class="v" style="color:var(--gold)">+1.00</span><span class="k">/tap</span></div>
+        </div>
+        <button class="btn btn-gold" onclick="buyHardware(2, 2000, 1.00, 150)">ADQUIRIR</button>
+      </div>
+
+    </div>
+
+    <!-- ════ PAGE: REFS ════ -->
+    <div id="page-refs" class="page">
+      <div class="card ref-card">
+        <div style="font-size:0.6rem; color:var(--muted); text-transform:uppercase; letter-spacing:2px;">Referidos Totales</div>
+        <div class="ref-count" id="ref-count">0</div>
+        <div style="font-size:0.65rem; color:var(--muted)">Gana <b style="color:var(--gold)">10 DRZ</b> por cada amigo</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Tu Enlace de Invitación</div>
+        <div class="ref-link-box" id="ref-link">Cargando...</div>
+        <button class="btn btn-gold" onclick="shareRef()">COMPARTIR ENLACE</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Estructura de Comisiones</div>
+        <div class="ref-tiers">
+          <div class="ref-tier">
+            <span style="font-size:0.8rem; font-weight:700;">Nivel 1 (directo)</span>
+            <span style="color:var(--gold); font-family:var(--font-mono); font-weight:800;">10 DRZ</span>
+          </div>
+          <div class="ref-tier">
+            <span style="font-size:0.8rem; font-weight:700;">Nivel 2 (indirecto)</span>
+            <span style="color:var(--gold); font-family:var(--font-mono); font-weight:800;">3 DRZ</span>
+          </div>
+          <div class="ref-tier">
+            <span style="font-size:0.8rem; font-weight:700;">Pasivos diarios</span>
+            <span style="color:var(--gold); font-family:var(--font-mono); font-weight:800;">5% del minado</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ PAGE: WALLET ════ -->
+    <div id="page-wallet" class="page">
+
+      <div class="wallet-hero">
+        <div class="wallet-label">Portafolio Total</div>
+        <div class="wallet-total">$<span id="w-total">0.00</span> <span class="currency">USD</span></div>
+        <div style="margin-top:8px; display:flex; justify-content:center; gap:16px;">
+          <div style="text-align:center">
+            <div style="font-family:var(--font-mono); font-weight:800; color:var(--gold)"><span id="w-drz">0.00</span></div>
+            <div style="font-size:0.55rem; color:var(--muted)">DRZ</div>
+          </div>
+          <div style="width:1px; background:var(--border)"></div>
+          <div style="text-align:center">
+            <div style="font-family:var(--font-mono); font-weight:800; color:var(--green)"><span id="w-usdt">0.00</span></div>
+            <div style="font-size:0.55rem; color:var(--muted)">USDT</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="wallet-actions">
+        <div class="wallet-action" onclick="openDeposit()">
+          <span class="wa-icon">📥</span>
+          <span class="wa-label">Depósito</span>
+        </div>
+        <div class="wallet-action" onclick="openWithdraw()">
+          <span class="wa-icon">📤</span>
+          <span class="wa-label">Retiro</span>
+        </div>
+        <div class="wallet-action" onclick="toggleSwap()">
+          <span class="wa-icon">🔄</span>
+          <span class="wa-label">Swap</span>
+        </div>
+      </div>
+
+      <div id="swap-box">
+        <div class="card-title">Convertir DRZ → USDT</div>
+        <div class="swap-input-wrap">
+          <input class="swap-input" id="swap-in" type="number" placeholder="Cantidad DRZ" oninput="calcSwap()">
+          <span class="swap-coin">DRZ</span>
+        </div>
+        <div class="swap-result" id="swap-out">Recibes: 0.00 USDT</div>
+        <button class="btn btn-gold" onclick="doSwap()">CONFIRMAR SWAP</button>
+      </div>
+
+      <div class="section-title">Historial de Transacciones</div>
+      <div class="card" id="tx-list">
+        <div style="text-align:center; color:var(--muted); font-size:0.75rem; padding:12px;">Sin transacciones aún</div>
+      </div>
+
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-btn active" onclick="navTo('mine',this)"><span class="ni">⛏️</span><span class="nl">Minar</span></div>
+    <div class="nav-btn" onclick="navTo('quests',this)"><span class="ni">🎯</span><span class="nl">Quests</span></div>
+    <div class="nav-btn" onclick="navTo('market',this)"><span class="ni">🛍️</span><span class="nl">Market</span></div>
+    <div class="nav-btn" onclick="navTo('refs',this)"><span class="ni">👥</span><span class="nl">Refs</span></div>
+    <div class="nav-btn" onclick="navTo('wallet',this)"><span class="ni">💳</span><span class="nl">Wallet</span></div>
+  </nav>
+</div>
+
+<!-- MODAL: DEPOSIT -->
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal-sheet" id="modal-sheet">
+    <div class="modal-handle"></div>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════
+const API_BASE = 'https://TU-DOMINIO.com/api'; // ← Cambiar por tu dominio
+const DRZ_RATE = 0.01; // 1 DRZ = $0.01 USD
+
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.expand(); tg.enableClosingConfirmation(); }
+
+const tgUser = tg?.initDataUnsafe?.user || { id: 0, first_name: 'Test', username: 'test' };
+const userId = tgUser.id;
+
+// ═══════════════════════════════════════════════════════
+//  LOCAL STATE (sincronizado con backend)
+// ═══════════════════════════════════════════════════════
+let state = {
+  drz: 0,
+  usdt: 0,
+  energy: 100,
+  maxEnergy: 100,
+  tapPower: 0.01,
+  totalClicks: 0,
+  totalSpend: 0,
+  referrals: 0,
+  refCode: '',
+  hardware: [],
+  transactions: [],
+  lastLogin: null
+};
+
+// ═══════════════════════════════════════════════════════
+//  API CALLS
+// ═══════════════════════════════════════════════════════
+async function apiCall(endpoint, method = 'GET', body = null) {
+  try {
+    const opts = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': tg?.initData || '',
+        'X-User-Id': userId
+      }
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(API_BASE + endpoint, opts);
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
+  } catch (e) {
+    console.error('API Error:', e);
+    return null;
+  }
+}
+
+async function loadUserData() {
+  const data = await apiCall(`/user/${userId}`);
+  if (data) {
+    state = { ...state, ...data };
+    const refStart = tg?.initDataUnsafe?.start_param;
+    if (refStart && refStart !== String(userId)) {
+      await apiCall('/referral/register', 'POST', { userId, refCode: refStart });
+    }
+  } else {
+    // Fallback a localStorage si API no disponible
+    state.drz        = parseFloat(localStorage.getItem('drz'))         || 0;
+    state.usdt       = parseFloat(localStorage.getItem('usdt'))        || 0;
+    state.energy     = parseInt(localStorage.getItem('energy'))        || 100;
+    state.tapPower   = parseFloat(localStorage.getItem('tapPower'))    || 0.01;
+    state.totalClicks= parseInt(localStorage.getItem('totalClicks'))   || 0;
+    state.totalSpend = parseFloat(localStorage.getItem('totalSpend'))  || 0;
+  }
+  state.refCode = state.refCode || String(userId);
+  updateUI();
+  updateRefLink();
+  renderTxHistory();
+  hideSplash();
+}
+
+async function syncTap() {
+  return apiCall('/mine/tap', 'POST', { userId, power: state.tapPower });
+}
+
+async function syncBuy(itemId, cost, powerAdd, passiveDay) {
+  return apiCall('/hardware/buy', 'POST', { userId, itemId, cost, powerAdd, passiveDay });
+}
+
+function saveLocal() {
+  localStorage.setItem('drz',         state.drz);
+  localStorage.setItem('usdt',        state.usdt);
+  localStorage.setItem('energy',      state.energy);
+  localStorage.setItem('tapPower',    state.tapPower);
+  localStorage.setItem('totalClicks', state.totalClicks);
+  localStorage.setItem('totalSpend',  state.totalSpend);
+}
+
+// ═══════════════════════════════════════════════════════
+//  UI UPDATE
+// ═══════════════════════════════════════════════════════
+function updateUI() {
+  // balances
+  const drzFmt  = state.drz.toFixed(2);
+  const usdtFmt = state.usdt.toFixed(2);
+  const usdVal  = (state.drz * DRZ_RATE + state.usdt).toFixed(2);
+
+  document.getElementById('hdr-drz').textContent   = drzFmt;
+  document.getElementById('hdr-usdt').textContent  = usdtFmt;
+  document.getElementById('bal-drz').textContent   = drzFmt;
+  document.getElementById('bal-usd').textContent   = usdVal;
+  document.getElementById('w-drz').textContent     = drzFmt;
+  document.getElementById('w-usdt').textContent    = usdtFmt;
+  document.getElementById('w-total').textContent   = usdVal;
+
+  // stats
+  document.getElementById('stat-power').textContent  = state.tapPower.toFixed(2);
+  document.getElementById('stat-clicks').textContent = state.totalClicks >= 1000
+    ? (state.totalClicks/1000).toFixed(1)+'k' : state.totalClicks;
+
+  // energy
+  const ePct = (state.energy / state.maxEnergy) * 100;
+  document.getElementById('energy-txt').textContent = `${state.energy} / ${state.maxEnergy}`;
+  document.getElementById('energy-bar').style.width = ePct + '%';
+
+  // rank
+  let rank = 'Bronce'; let rankPct = 5; let rankEmoji = '🥉';
+  if (state.totalClicks >= 500)  { rank = 'Plata';   rankPct = 35; rankEmoji = '🥈'; }
+  if (state.totalClicks >= 2000) { rank = 'Oro';     rankPct = 65; rankEmoji = '🥇'; }
+  if (state.totalClicks >= 5000) { rank = 'Platino'; rankPct = 85; rankEmoji = '💎'; }
+  if (state.totalClicks >= 15000){ rank = 'Diamante';rankPct = 100; rankEmoji = '🔷'; }
+  document.getElementById('rank-badge').textContent   = rank;
+  document.getElementById('rank-bar').style.width     = rankPct + '%';
+  document.getElementById('stat-rank').textContent    = rankEmoji;
+
+  // quests
+  updateQuests();
+
+  // ref count
+  document.getElementById('ref-count').textContent = state.referrals || 0;
+}
+
+function updateQuests() {
+  const c = state.totalClicks, s = state.totalSpend, r = state.referrals || 0;
+  setQuest('q1', c, 1000, c >= 1000);
+  setQuest('q2', s, 500,  s >= 500);
+  setQuest('q3', r, 5,    r >= 5);
+}
+
+function setQuest(id, curr, max, done) {
+  const prog = document.getElementById(`${id}-prog`);
+  const bar  = document.getElementById(`${id}-bar`);
+  const rew  = document.getElementById(`${id}-reward`);
+  if (prog) prog.textContent = curr.toFixed ? curr.toFixed(0) : curr;
+  if (bar)  bar.style.width = Math.min(100, (curr/max)*100) + '%';
+  if (done && rew && !rew.classList.contains('quest-done')) {
+    rew.textContent = '✅ Listo';
+    rew.classList.add('quest-done');
+  }
+}
+
+function updateRefLink() {
+  const link = `https://t.me/drz_miner_bot?start=${state.refCode || userId}`;
+  const el = document.getElementById('ref-link');
+  if (el) el.textContent = link;
+}
+
+function renderTxHistory() {
+  const list = document.getElementById('tx-list');
+  if (!list) return;
+  const txs = state.transactions || [];
+  if (txs.length === 0) {
+    list.innerHTML = '<div style="text-align:center; color:var(--muted); font-size:0.75rem; padding:12px;">Sin transacciones aún</div>';
+    return;
+  }
+  list.innerHTML = txs.slice(0, 10).map(tx => `
+    <div class="tx-item">
+      <div>
+        <div class="tx-type">${tx.type_label || tx.type}</div>
+        <div class="tx-date">${new Date(tx.created_at).toLocaleDateString('es',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="tx-amount ${tx.amount > 0 ? 'pos' : 'neg'}">${tx.amount > 0 ? '+' : ''}${tx.amount} ${tx.currency}</div>
+        <span class="tx-status ${tx.status}">${tx.status}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  CLICKER
+// ═══════════════════════════════════════════════════════
+let tapQueue = 0;
+let tapFlushTimer = null;
+
+document.getElementById('clicker').addEventListener('click', function(e) {
+  if (state.energy <= 0) {
+    showToast('⚡ Sin energía. Espera unos minutos.');
+    return;
+  }
+  state.energy--;
+  state.drz += state.tapPower;
+  state.totalClicks++;
+  tapQueue++;
+  saveLocal();
+  updateUI();
+  spawnFloat(e, `+${state.tapPower.toFixed(2)}`);
+  if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+  // Debounce sync: enviar al backend cada 3s o 20 taps
+  clearTimeout(tapFlushTimer);
+  if (tapQueue >= 20) flushTaps();
+  else tapFlushTimer = setTimeout(flushTaps, 3000);
+});
+
+async function flushTaps() {
+  if (tapQueue === 0) return;
+  const qty = tapQueue; tapQueue = 0;
+  const res = await apiCall('/mine/tap', 'POST', { userId, quantity: qty, power: state.tapPower });
+  if (res?.drz !== undefined) { state.drz = res.drz; updateUI(); }
+}
+
+function spawnFloat(e, text) {
+  const el = document.createElement('div');
+  el.className = 'float-text';
+  el.textContent = text;
+  const rect = document.getElementById('clicker').getBoundingClientRect();
+  el.style.left = (rect.left + rect.width/2 - 20 + (Math.random()-0.5)*40) + 'px';
+  el.style.top  = (rect.top + 20) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 900);
+}
+
+// ═══════════════════════════════════════════════════════
+//  HARDWARE
+// ═══════════════════════════════════════════════════════
+async function buyHardware(id, cost, powerAdd, passiveDay) {
+  if (state.drz < cost) { showToast('❌ No tienes suficientes DRZ'); return; }
+  state.drz        -= cost;
+  state.tapPower   += powerAdd;
+  state.totalSpend += cost;
+  saveLocal();
+  updateUI();
+  showToast('✅ Hardware instalado! Poder de minado aumentado.');
+  if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+  const res = await syncBuy(id, cost, powerAdd, passiveDay);
+  if (res?.drz !== undefined) { state.drz = res.drz; state.tapPower = res.tapPower; updateUI(); }
+}
+
+// ═══════════════════════════════════════════════════════
+//  SWAP
+// ═══════════════════════════════════════════════════════
+function toggleSwap() {
+  const box = document.getElementById('swap-box');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+function calcSwap() {
+  const val = parseFloat(document.getElementById('swap-in').value) || 0;
+  document.getElementById('swap-out').textContent = `Recibes: ${(val * DRZ_RATE).toFixed(4)} USDT`;
+}
+
+async function doSwap() {
+  const val = parseFloat(document.getElementById('swap-in').value);
+  if (!val || val <= 0)         { showToast('Ingresa una cantidad'); return; }
+  if (val > state.drz)          { showToast('❌ Fondos insuficientes'); return; }
+  if (val * DRZ_RATE < 1)       { showToast('⚠️ Mínimo equivale a 1 USDT'); return; }
+  const res = await apiCall('/wallet/swap', 'POST', { userId, drzAmount: val });
+  if (res?.success) {
+    state.drz  = res.drz;
+    state.usdt = res.usdt;
+    saveLocal();
+    updateUI();
+    showToast('✅ Swap completado');
+    toggleSwap();
+    state.transactions = res.transactions || state.transactions;
+    renderTxHistory();
+  } else showToast('❌ Error en el swap. Intenta nuevamente.');
+}
+
+// ═══════════════════════════════════════════════════════
+//  DEPOSIT
+// ═══════════════════════════════════════════════════════
+async function openDeposit() {
+  showModal(`
+    <div class="modal-title">📥 Depositar USDT (BEP20)</div>
+    <div class="card-title">Dirección de depósito</div>
+    <div class="deposit-address" id="dep-addr">Cargando...</div>
+    <div class="info-row"><span class="info-k">Red</span><span class="info-v">BSC (BEP20)</span></div>
+    <div class="info-row"><span class="info-k">Token</span><span class="info-v">USDT — Tether USD</span></div>
+    <div class="info-row"><span class="info-k">Mínimo</span><span class="info-v">5 USDT</span></div>
+    <div class="info-row"><span class="info-k">Confirmaciones</span><span class="info-v">15 bloques</span></div>
+    <div style="margin-top:8px; padding:10px; background:rgba(240,192,64,0.08); border-radius:8px; font-size:0.65rem; color:var(--gold);">
+      ⚠️ Solo envía USDT en la red BSC (BEP20). Enviar otra moneda resultará en pérdida permanente de fondos.
+    </div>
+    <button class="btn btn-gold" style="margin-top:12px;" onclick="copyDepAddress()">COPIAR DIRECCIÓN</button>
+    <button class="btn btn-outline" style="margin-top:6px;" onclick="closeModal()">CERRAR</button>
+  `);
+  const res = await apiCall(`/wallet/deposit-address/${userId}`);
+  const addrEl = document.getElementById('dep-addr');
+  if (addrEl) addrEl.textContent = res?.address || 'Error al cargar';
+}
+
+async function copyDepAddress() {
+  const addr = document.getElementById('dep-addr')?.textContent;
+  if (addr) {
+    try { await navigator.clipboard.writeText(addr); } catch(e) {}
+    showToast('📋 Dirección copiada');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  WITHDRAW
+// ═══════════════════════════════════════════════════════
+function openWithdraw() {
+  showModal(`
+    <div class="modal-title">📤 Retirar USDT</div>
+    <div class="info-row"><span class="info-k">Disponible</span><span class="info-v" style="color:var(--green)">${state.usdt.toFixed(2)} USDT</span></div>
+    <div class="info-row"><span class="info-k">Mínimo</span><span class="info-v">10 USDT</span></div>
+    <div class="info-row"><span class="info-k">Comisión red</span><span class="info-v">1 USDT</span></div>
+    <input class="modal-input" id="wd-amount" type="number" placeholder="Cantidad USDT" min="10" max="${state.usdt}">
+    <input class="modal-input" id="wd-address" type="text" placeholder="Wallet BEP20 destino (0x...)">
+    <div style="font-size:0.62rem; color:var(--muted); margin-bottom:10px;">Procesado en 12-24hs hábiles</div>
+    <button class="btn btn-gold" onclick="submitWithdraw()">SOLICITAR RETIRO</button>
+    <button class="btn btn-outline" style="margin-top:6px;" onclick="closeModal()">CANCELAR</button>
+  `);
+}
+
+async function submitWithdraw() {
+  const amount  = parseFloat(document.getElementById('wd-amount')?.value);
+  const address = document.getElementById('wd-address')?.value?.trim();
+  if (!amount || amount < 10)         { showToast('⚠️ Mínimo 10 USDT'); return; }
+  if (amount > state.usdt)            { showToast('❌ Saldo insuficiente'); return; }
+  if (!address || !address.startsWith('0x') || address.length !== 42) {
+    showToast('❌ Dirección inválida'); return;
+  }
+  const res = await apiCall('/wallet/withdraw', 'POST', { userId, amount, address });
+  if (res?.success) {
+    state.usdt = res.usdt;
+    state.transactions = res.transactions || state.transactions;
+    saveLocal(); updateUI(); renderTxHistory();
+    closeModal();
+    showToast('✅ Solicitud de retiro enviada');
+  } else showToast(res?.error || '❌ Error al procesar');
+}
+
+// ═══════════════════════════════════════════════════════
+//  QUESTS
+// ═══════════════════════════════════════════════════════
+async function dailyCheckIn() {
+  const res = await apiCall('/quest/checkin', 'POST', { userId });
+  if (res?.reward) {
+    state.drz += res.reward;
+    saveLocal(); updateUI();
+    showToast(`🎁 Check-in: +${res.reward} DRZ`);
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+  } else showToast(res?.message || '⚠️ Ya hiciste check-in hoy');
+}
+
+// ═══════════════════════════════════════════════════════
+//  REFERIDOS
+// ═══════════════════════════════════════════════════════
+function shareRef() {
+  const link = `https://t.me/drz_miner_bot?start=${state.refCode || userId}`;
+  const text = `⛏️ Únete a DRZ MINER y empieza a ganar criptomonedas haciendo clic!\n\n${link}`;
+  if (tg?.openTelegramLink) {
+    tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+  } else {
+    try { navigator.clipboard.writeText(link); showToast('📋 Link copiado'); } catch(e) {}
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════════
+function navTo(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(n => n.classList.remove('active'));
+  document.getElementById(`page-${id}`).classList.add('active');
+  el.classList.add('active');
+  if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+}
+
+// ═══════════════════════════════════════════════════════
+//  MODAL
+// ═══════════════════════════════════════════════════════
+function showModal(html) {
+  document.getElementById('modal-content').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal-overlay')) {
+    document.getElementById('modal-overlay').classList.remove('open');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ═══════════════════════════════════════════════════════
+//  SPLASH
+// ═══════════════════════════════════════════════════════
+function hideSplash() {
+  const s = document.getElementById('splash');
+  if (s) { s.style.opacity = '0'; setTimeout(() => s.remove(), 600); }
+}
+
+// ═══════════════════════════════════════════════════════
+//  ENERGY REGEN (1 cada 60s)
+// ═══════════════════════════════════════════════════════
+setInterval(() => {
+  if (state.energy < state.maxEnergy) {
+    state.energy++;
+    saveLocal();
+    updateUI();
+  }
+}, 60000);
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+loadUserData();
+</script>
+</body>
+</html>
