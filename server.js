@@ -121,7 +121,7 @@ app.get('/api/user/:userId', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
-//  ROUTES: MINING
+//  ROUTES: MINING lalala
 // ═══════════════════════════════════════════════════════
 
 // POST /api/mine/tap — Registrar taps
